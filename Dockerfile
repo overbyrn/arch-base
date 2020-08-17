@@ -1,4 +1,4 @@
-FROM overbyrn/arch-scratch:latest
+FROM scratch
 MAINTAINER overbyrn
 
 # additional files
@@ -10,12 +10,21 @@ ADD build/*.conf /etc/supervisor.conf
 # add install bash script
 ADD build/root/*.sh /root/
 
-# install app
-#############
+# add statically linked busybox
+ADD build/utils/busybox/busybox /bootstrap/busybox
 
-# run bash script to update base image, set locale, install supervisor and cleanup
-RUN chmod +x /root/*.sh && \
-	/bin/bash /root/install.sh
+# unpack tarball
+################
+
+# symlink busybox utilities to /bootstrap folder
+RUN ["/bootstrap/busybox", "--install", "-s", "/bootstrap"]
+
+# run busybox bourne shell and use sub shell to execute busybox utils (wget, rm...)
+# to download and extract tarball. 
+# once the tarball is extracted we then use bash to execute the install script to
+# install everything else for the base image.
+# note, do not line wrap the below command, as it will fail looking for /bin/sh
+RUN ["/bootstrap/sh", "-c", "rel_date=$(/bootstrap/date +%Y.%m.01) && /bootstrap/wget -O /bootstrap/archlinux.tar.gz http://archlinux.de-labrusse.fr/iso/latest/archlinux-bootstrap-${rel_date}-x86_64.tar.gz && /bootstrap/tar --exclude=root.x86_64/etc/resolv.conf --exclude=root.x86_64/etc/hosts -xvf /bootstrap/archlinux.tar.gz --strip-components=1 -C / && /bin/bash -c 'chmod +x /root/*.sh && /bin/bash /root/install.sh'"]
 
 # env
 #####
@@ -27,7 +36,7 @@ ENV HOME /home/nobody
 ENV TERM xterm
 
 # set environment variables for language
-ENV LANG en_GB.UTF-8
+ENV LANG en_US.UTF-8
 
 # run
 #####
